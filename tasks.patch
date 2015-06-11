@@ -1,0 +1,96 @@
+From 0772364abba97902fb8309c9a5181a881d0a0789 Mon Sep 17 00:00:00 2001
+From: Chris DeLashmutt <cdelashmutt@pivotal.io>
+Date: Fri, 22 May 2015 22:00:58 +0000
+Subject: [PATCH] Adding in checks to account for tasks that might be in queued
+ or preRunning states. Many of the operations assumed that after tasks were
+ submitted with vCD that they would be in a "running" status when checked
+ again, and that if they weren't, then they must be completed.  This commit
+ handles tasks that were submitted, but haven't yet started running, and
+ allows them to start running before assuming they have completed.
+
+---
+ lib/cloud/vcloud/steps/insert_catalog_media.rb | 2 +-
+ lib/cloud/vcloud/vcd_client.rb                 | 4 ++++
+ lib/cloud/vcloud/xml/wrapper_classes/disk.rb   | 4 ++++
+ lib/cloud/vcloud/xml/wrapper_classes/media.rb  | 5 +++++
+ lib/cloud/vcloud/xml/wrapper_classes/vapp.rb   | 5 +++++
+ 5 files changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/lib/cloud/vcloud/steps/insert_catalog_media.rb b/lib/cloud/vcloud/steps/insert_catalog_media.rb
+index c36eeda..b4a2461 100644
+--- a/lib/cloud/vcloud/steps/insert_catalog_media.rb
++++ b/lib/cloud/vcloud/steps/insert_catalog_media.rb
+@@ -10,7 +10,7 @@ module VCloudCloud
+         client.timed_loop do
+           media = client.reload media
+           vm = client.reload vm
+-          if media.running_tasks.empty?
++          if media.running_tasks.empty? && media.prerunning_tasks.empty?
+             client.invoke_and_wait :post, vm.insert_media_link,
+                     :payload => params,
+                     :headers => { :content_type => VCloudSdk::Xml::MEDIA_TYPE[:MEDIA_INSERT_EJECT_PARAMS] }
+diff --git a/lib/cloud/vcloud/vcd_client.rb b/lib/cloud/vcloud/vcd_client.rb
+index 19f783f..bc115ab 100644
+--- a/lib/cloud/vcloud/vcd_client.rb
++++ b/lib/cloud/vcloud/vcd_client.rb
+@@ -145,6 +145,10 @@ module VCloudCloud
+     end
+ 
+     def wait_entity(entity, accept_failure = false)
++      entity.prerunning_tasks.each do |task|
++        wait_task task, accept_failure
++      end if entity.prerunning_tasks && !entity.prerunning_tasks.empty?
++
+       entity.running_tasks.each do |task|
+         wait_task task, accept_failure
+       end if entity.running_tasks && !entity.running_tasks.empty?
+diff --git a/lib/cloud/vcloud/xml/wrapper_classes/disk.rb b/lib/cloud/vcloud/xml/wrapper_classes/disk.rb
+index 78c88b3..5981963 100644
+--- a/lib/cloud/vcloud/xml/wrapper_classes/disk.rb
++++ b/lib/cloud/vcloud/xml/wrapper_classes/disk.rb
+@@ -24,6 +24,10 @@ module VCloudSdk
+         @root["size"].to_i/1024/1024
+       end
+ 
++      def prerunning_tasks
++        tasks.find_all {|t| TASK_STATUS[:QUEUED].include?(t.status) || TASK_STATUS[:PRE_RUNNING].include?(t.status)}
++      end
++
+       def running_tasks
+         tasks.find_all {|t| RUNNING.include?(t.status)}
+       end
+diff --git a/lib/cloud/vcloud/xml/wrapper_classes/media.rb b/lib/cloud/vcloud/xml/wrapper_classes/media.rb
+index 8dbb137..e7d80b0 100644
+--- a/lib/cloud/vcloud/xml/wrapper_classes/media.rb
++++ b/lib/cloud/vcloud/xml/wrapper_classes/media.rb
+@@ -44,6 +44,11 @@ module VCloudSdk
+         get_nodes("Link", {"rel" => "remove"}, true).first
+       end
+ 
++      def prerunning_tasks
++        get_nodes("Task", {"status" => "queued"})
++          .concat(get_nodes("Task", {"status" => "preRunning"}))
++      end
++
+       def running_tasks
+         get_nodes("Task", {"status" => "running"})
+       end
+diff --git a/lib/cloud/vcloud/xml/wrapper_classes/vapp.rb b/lib/cloud/vcloud/xml/wrapper_classes/vapp.rb
+index fee07ae..3f082fc 100644
+--- a/lib/cloud/vcloud/xml/wrapper_classes/vapp.rb
++++ b/lib/cloud/vcloud/xml/wrapper_classes/vapp.rb
+@@ -33,6 +33,11 @@ module VCloudSdk
+         fix_if_invalid(link, "remove", "", href)
+       end
+ 
++      def prerunning_tasks
++        get_nodes("Task", {"status" => "queued"})
++          .concat(get_nodes("Task", {"status" => "preRunning"}))
++      end
++
+       def running_tasks
+         get_nodes("Task", {"status" => "running"})
+       end
+-- 
+1.8.4.msysgit.0
+
