@@ -78,11 +78,11 @@ tar -czf $SCRIPT_DIR/bosh_vcloud_cpi.tgz $BOSH_VCLOUD_CPI
 cd $BOSH_VCLOUD_CPI
 
 #Apply fix to bosh_vcloud_cpi
-if [[ "$OPSMGRVER" == "1.4" ]]
+if [[ "$OPSMGRVER" == "1.4" || "$BOSH_VCLOUD_CPI_VER" == "0.7.2" ]]
 then
   echo "Applying tasks.patch"
   patch -p1 < $SCRIPT_DIR/tasks.patch
-elif [[ "$OPSMGRVER" == "1.5" ]]
+elif [[ "$OPSMGRVER" == "1.5" || "$BOSH_VCLOUD_CPI_VER" == "0.7.7" ]]
 then
   echo "Applying bosh_vcloud_cpi_0.7.7_base64.patch"
   patch -p1 < $SCRIPT_DIR/bosh_vcloud_cpi_0.7.7_base64.patch
