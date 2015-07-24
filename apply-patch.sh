@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIRECTOR_BASE="/var/vcap/data/packages/director"
-TEMPEST_BASE="/home/tempest-web/tempest/web/vendor/bundle/ruby/2.1.0/gems"
+TEMPEST_BASE="/home/tempest-web/tempest/web"
 
 #First, make sure we are on the right VM
 if [ -e "$DIRECTOR_BASE" ]
@@ -10,8 +10,22 @@ then
 elif [ -e "$TEMPEST_BASE" ]
 then
   VM="tempest"
+  OPSMGRVERFILE=$(<$TEMPEST_BASE/VERSION)
+  if [[ $OPSMGRVERFILE =~ ^1\.5.* ]]
+  then
+    TEMPEST_GEM_BASE="$TEMPEST_BASE/vendor/bundle/ruby/2.2.0/gems"
+    OPSMGRVER="1.5"
+  elif [[ $OPSMGRVERFILE =~ ^1\.4.* ]]
+  then
+    TEMPEST_GEM_BASE="$TEMPEST_BASE/vendor/bundle/ruby/2.1.0/gems"
+    OPSMGRVER="1.4"
+  else
+    echo "This machine looks like an Ops Manager VM, but it appears to be running version $OPSMGRVERFILE which isn't currently supported by the script."
+    exit
+  fi
+  echo "Found version $OPSMGRVERFILE of Ops Manager"
 else
-  echo This machine does not appear to be Ops Manager or the Director VM.  Please ensure you are on the right machine before running this script, and that you are running it as root.
+  echo "This machine does not appear to be Ops Manager or the Director VM, or it is running a version that isn't supported by this patch.  Please ensure you are on the right machine before running this script, and that you are running it as root."
   exit
 fi
 
@@ -27,8 +41,12 @@ fi
 
 if [ "tempest" == "$VM" ]
 then
-  RUBY_VCLOUD_SDK="$TEMPEST_BASE/ruby_vcloud_sdk-0.7.2"
-  BOSH_VCLOUD_CPI="$TEMPEST_BASE/bosh_vcloud_cpi-0.7.2"
+  RUBY_VCLOUD_SDK="$TEMPEST_GEM_BASE/ruby_vcloud_sdk-0.7.2"
+  if [[ "$OPSMGRVER" == "1.5" ]]; then
+    BOSH_VCLOUD_CPI="$TEMPEST_GEM_BASE/bosh_vcloud_cpi-0.7.7"
+  else
+    BOSH_VCLOUD_CPI="$TEMPEST_GEM_BASE/bosh_vcloud_cpi-0.7.2"
+  fi
 
   #Backup ruby_vcloud_sdk first
   echo Backing up ruby_vcloud_sdk
@@ -38,7 +56,17 @@ then
   cd $RUBY_VCLOUD_SDK 
 
   #Apply fix to ruby_vcloud_sdk
-  patch -p1 < $SCRIPT_DIR/connection.patch
+  if [[ "$OPSMGRVER" == "'1.4" ]]
+  then
+    echo "Applying connection.patch"
+    patch -p1 < $SCRIPT_DIR/connection.patch
+  elif [[ "$OPSMGRVER" == "1.5" ]]
+  then
+    echo "Applying ruby_vcloud_sdk_authandbase64.patch"
+    patch -p1 < $SCRIPT_DIR/ruby_vcloud_sdk_authandbase64.patch
+  else
+    echo "Warning!  Could not decide on which patch to apply to ruby_vcloud_sdk.  The patcher may not be able to patch this VM"
+  fi
 else
   BOSH_VCLOUD_CPI="$DIRECTOR_BASE/$( ls $DIRECTOR_BASE )/gem_home/ruby/2.1.0/gems/bosh_vcloud_cpi-0.7.2"
 fi
@@ -50,4 +78,14 @@ tar -czf $SCRIPT_DIR/bosh_vcloud_cpi.tgz $BOSH_VCLOUD_CPI
 cd $BOSH_VCLOUD_CPI
 
 #Apply fix to bosh_vcloud_cpi
-patch -p1 < $SCRIPT_DIR/tasks.patch
+if [[ "$OPSMGRVER" == "1.4" ]]
+then
+  echo "Applying tasks.patch"
+  patch -p1 < $SCRIPT_DIR/tasks.patch
+elif [[ "$OPSMGRVER" == "1.5" ]]
+then
+  echo "Applying bosh_vcloud_cpi_0.7.7_base64.patch"
+  patch -p1 < $SCRIPT_DIR/bosh_vcloud_cpi_0.7.7_base64.patch
+else
+  echo "Warning!  Could not decide on which patch to apply to bosh_vcloud_cpi.  The patcher may not be able to patch this VM"
+fi

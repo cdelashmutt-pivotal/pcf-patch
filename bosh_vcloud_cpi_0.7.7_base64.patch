@@ -1,0 +1,12 @@
+diff -rupN bosh_vcloud_cpi-0.7.7.orig/lib/cloud/vcloud/vcd_client.rb bosh_vcloud_cpi-0.7.7/lib/cloud/vcloud/vcd_client.rb
+--- bosh_vcloud_cpi-0.7.7.orig/lib/cloud/vcloud/vcd_client.rb	2015-07-23 22:28:39.239234274 +0000
++++ bosh_vcloud_cpi-0.7.7/lib/cloud/vcloud/vcd_client.rb	2015-07-23 22:29:48.518300944 +0000
+@@ -250,7 +250,7 @@ module VCloudCloud
+     def session
+       unless cookie_available?
+         auth = "#{@user}@#{@entities['organization']}:#{@pass}"
+-        auth_header = "Basic #{Base64.encode64(auth)}"
++        auth_header = "Basic #{Base64.strict_encode64(auth)}"
+         response = send_request :post, login_url,
+                     :headers => { :Authorization => auth_header, :content_type => 'application/x-www-form-urlencoded' },
+                     :payload => URI.encode_www_form({ :Authorization => auth_header, :Accept => "application/*+xml;version=#{VCLOUD_VERSION_NUMBER}" }),
