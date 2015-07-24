@@ -65,10 +65,22 @@ then
     echo "Applying ruby_vcloud_sdk_authandbase64.patch"
     patch -p1 < $SCRIPT_DIR/ruby_vcloud_sdk_authandbase64.patch
   else
-    echo "Warning!  Could not decide on which patch to apply to ruby_vcloud_sdk.  The patcher may not be able to patch this VM"
+    echo "Could not decide on which patch to apply to ruby_vcloud_sdk.  The patcher doesn't understand how to patch this VM."
+    exit
   fi
 else
-  BOSH_VCLOUD_CPI="$DIRECTOR_BASE/$( ls $DIRECTOR_BASE )/gem_home/ruby/2.1.0/gems/bosh_vcloud_cpi-0.7.2"
+  BOSH_VCLOUD_GEMS="$DIRECTOR_BASE/$( ls $DIRECTOR_BASE )/gem_home/ruby/2.1.0/gems"
+  if [ -d "$BOSH_VCLOUD_GEMS/bosh_vcloud_cpi-0.7.2" ]
+  then
+    BOSH_VCLOUD_CPI_VER="0.7.2"
+  elif [ -d "$BOSH_VCLOUD_GEMS/bosh_vcloud_cpi-0.7.7" ]
+  then
+    BOSH_VCLOUD_CPI_VER="0.7.7"
+  else
+    echo "Could not find a bosh_vcloud_cpi version that this script understands how to patch."
+    exit
+  fi
+  BOSH_VCLOUD_CPI="$BOSH_VCLOUD_GEMS/bosh_vcloud_cpi-$BOSH_VCLOUD_CPI_VER"
 fi
   
 echo Backing up bosh_vcloud_cpi
